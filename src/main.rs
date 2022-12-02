@@ -1,83 +1,101 @@
-use std::collections::LinkedList;
+use core::panic;
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, Read};
 use std::path::Path;
 
 fn main() {
-    if let Ok(lines) = read_lines(".../src/input.txt") {
-        let agg_data: LinkedList<u32> = aggregate_to_list(lines);
-        evaluate_two(&agg_data);
-        evaluate_one(agg_data);
+    let points: u32 = read_text("./src/input.txt")
+        .unwrap()
+        .split("\n")
+        .map(|s| s.trim())
+        .map(|e| Game::new(e.split_once(" ").unwrap()))
+        .map(|game| game.p1_points())
+        .sum();
+    print!("{}\n", points);
+}
+
+#[derive(PartialEq, Eq)]
+enum Selection {
+    Rock,
+    Paper,
+    Scissor,
+}
+
+struct Game {
+    p1: Hand,
+    p2: Hand,
+}
+impl Game {
+    pub fn new(game_desc: (&str, &str)) -> Self {
+        let (first, second) = game_desc;
+        Self {
+            p1: (Hand::new(second)),
+            p2: (Hand::new(first)),
+        }
+    }
+
+    fn evaluate_game(&self) -> u32 {
+        if self.p1.meets(&self.p2) {
+            return 3;
+        }
+        if self.p1.beats(&self.p2) {
+            return 6;
+        }
+        return 0;
+    }
+
+    pub fn p1_points(&self) -> u32 {
+        self.evaluate_game() + self.p1.points
     }
 }
 
-// The output is wrapped in a Result to allow matching on errors
-// Returns an Iterator to the Reader of the lines of the file.
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+struct Hand {
+    selection: Selection,
+    points: u32,
+    by: String,
+}
+impl Hand {
+    pub fn new(str: &str) -> Self {
+        if str == "A" || str == "X" {
+            return Self {
+                selection: Selection::Rock,
+                points: 1,
+                by: str.to_string(),
+            };
+        } else if str == "B" || str == "Y" {
+            return Self {
+                selection: Selection::Paper,
+                points: 2,
+                by: str.to_string(),
+            };
+        } else if str == "C" || str == "Z" {
+            return Self {
+                selection: Selection::Scissor,
+                points: 3,
+                by: str.to_string(),
+            };
+        } else {
+            panic!("Aaaaaah val: {str}");
+        }
+    }
+
+    pub fn meets(&self, other: &Hand) -> bool {
+        self.selection == other.selection
+    }
+
+    pub fn beats(&self, other: &Hand) -> bool {
+        self.selection == Selection::Rock && other.selection == Selection::Scissor
+            || self.selection == Selection::Paper && other.selection == Selection::Rock
+            || self.selection == Selection::Scissor && other.selection == Selection::Paper
+    }
+}
+
+fn read_text<P>(filename: P) -> io::Result<String>
 where
     P: AsRef<Path>,
 {
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
-}
-
-// Create list each entry is the sum of all calories for a given elf
-fn aggregate_to_list(lines: io::Lines<io::BufReader<File>>) -> LinkedList<u32> {
-    let mut list: LinkedList<u32> = LinkedList::new();
-    for line in lines {
-        if let Ok(line_data) = line {
-            if line_data.is_empty() {
-                list.push_back(0);
-            } else {
-                let amount = line_data.parse::<u32>();
-                if let Ok(a) = amount {
-                    let current = list.pop_back();
-                    if current.is_some() {
-                        list.push_back(current.unwrap() + a);
-                    }
-                }
-            }
-        }
-    }
-    list
-}
-
-fn evaluate_one(mut list: LinkedList<u32>) -> () {
-    let mut curridx = 0;
-    let mut maxidx = 0;
-    let mut maxval = 0;
-    while !list.is_empty() {
-        let tmp = list.pop_front().unwrap();
-        if tmp > maxval {
-            maxval = tmp;
-            maxidx = curridx;
-        }
-        curridx += 1;
-    }
-    print!(
-        "Elf {} hat die meisten calorien mit {}\n",
-        maxidx + 1,
-        maxval
-    );
-}
-
-fn evaluate_two(list: &LinkedList<u32>) -> () {
-    let mut array: [u32; 3] = [0; 3];
-    let mut counter = 2;
-    for calories in list {
-        if counter != 0 {
-            array[counter] = *calories;
-            counter -= 1;
-            if counter == 1 {
-                array.sort();
-            }
-        } else {
-            if array[0] < *calories {
-                array[0] = *calories;
-                array.sort();
-            }
-        }
-    }
-    let sum: u32 = array.iter().sum();
-    print!("Top Drei Summe: {}\n", sum);
+    let mut buf = String::new();
+    let mut file = File::open(filename)?;
+    file.read_to_string(&mut buf);
+    Ok(buf)
 }
